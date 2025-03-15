@@ -42,7 +42,7 @@ class UnityMCP:
     def get_all_prefabs(self) -> dict:
         """
         Get a list of all prefabs in the project.
-        :return: A dict with { "prefabs": [ { "name": ..., "path": ... }, ... ] }
+        :return: A dict with prefab names and their paths.
         """
         payload = {
             "command": "get_all_prefabs",
@@ -53,7 +53,7 @@ class UnityMCP:
     def get_all_gameobjects_in_scene(self) -> dict:
         """
         Get a list of all GameObjects in the currently active scene.
-        :return: A dict with { "gameObjects": [ ... ] }
+        :return: A dict with { "success": true, "gameObjects": [ ... ] }
         """
         payload = {
             "command": "get_all_gameobjects_in_scene",
@@ -77,19 +77,25 @@ class UnityMCP:
         }
         return self._send_request(payload)
 
-    def create_script_asset(self, script_name: str, script_content: str) -> dict:
+    def create_script_asset(self, script_name: str, script_content: str, folder_path: str = None) -> dict:
         """
         Dynamically create a C# script in Unity.
         :param script_name: Name of the new script file (no .cs extension).
         :param script_content: The entire script content as a string.
+        :param folder_path: Optional folder path where script will be created, defaults to "Assets/MCP/Scripts".
         :return: A dict with a success/failure message
         """
+        params = {
+            "scriptName": script_name,
+            "scriptContent": script_content
+        }
+        
+        if folder_path:
+            params["folderPath"] = folder_path
+            
         payload = {
             "command": "create_script_asset",
-            "parameters": {
-                "scriptName": script_name,
-                "scriptContent": script_content
-            }
+            "parameters": params
         }
         return self._send_request(payload)
 
@@ -110,6 +116,78 @@ class UnityMCP:
                 "componentType": component_type,
                 "propertyName": property_name,
                 "value": value
+            }
+        }
+        return self._send_request(payload)
+        
+    def instantiate_prefab(self, prefab_path: str) -> dict:
+        """
+        Instantiate a prefab in the current scene.
+        :param prefab_path: Path to the prefab asset in the project.
+        :return: A dict with the instantiated GameObject information.
+        """
+        payload = {
+            "command": "instantiate_prefab",
+            "parameters": {
+                "prefabPath": prefab_path
+            }
+        }
+        return self._send_request(payload)
+        
+    def find_gameobjects_by_tag(self, tag: str) -> dict:
+        """
+        Find all GameObjects with the specified tag.
+        :param tag: The tag to search for.
+        :return: A dict with a list of GameObjects with that tag.
+        """
+        payload = {
+            "command": "find_gameobjects_by_tag",
+            "parameters": {
+                "tag": tag
+            }
+        }
+        return self._send_request(payload)
+        
+    def get_all_components(self, gameobject_name: str) -> dict:
+        """
+        Get all components attached to the specified GameObject.
+        :param gameobject_name: The name of the GameObject.
+        :return: A dict with a list of component names.
+        """
+        payload = {
+            "command": "get_all_components",
+            "parameters": {
+                "gameObjectName": gameobject_name
+            }
+        }
+        return self._send_request(payload)
+        
+    def remove_component(self, gameobject_name: str, component_name: str) -> dict:
+        """
+        Remove a component from a GameObject.
+        :param gameobject_name: Name of the GameObject.
+        :param component_name: Name of the component to remove.
+        :return: A dict with the operation result.
+        """
+        payload = {
+            "command": "remove_component",
+            "parameters": {
+                "gameObjectName": gameobject_name,
+                "componentName": component_name
+            }
+        }
+        return self._send_request(payload)
+        
+    def delete_gameobject(self, gameobject_name: str) -> dict:
+        """
+        Delete a GameObject from the scene.
+        :param gameobject_name: Name of the GameObject to delete.
+        :return: A dict with the operation result.
+        """
+        payload = {
+            "command": "delete_gameobject",
+            "parameters": {
+                "name": gameobject_name
             }
         }
         return self._send_request(payload)
