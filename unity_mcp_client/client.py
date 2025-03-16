@@ -1,4 +1,5 @@
 import requests
+import re
 
 
 class UnityMCP:
@@ -14,10 +15,11 @@ class UnityMCP:
         """
         self.host = host.rstrip("/")  # remove trailing slash if any
 
-    def create_gameobject(self, object_name: str) -> dict:
+    def create_gameobject(self, object_name: str, parent_name: str = None) -> dict:
         """
         Create a new GameObject in the currently active Unity scene.
         :param object_name: The name for the new GameObject.
+        :param parent_name: Optional name of a parent GameObject to set as the parent.
         :return: A dict with the server's response data.
         """
         payload = {
@@ -26,6 +28,11 @@ class UnityMCP:
                 "objectName": object_name
             }
         }
+        
+        # Add parent_name to parameters if provided
+        if parent_name:
+            payload["parameters"]["parentName"] = parent_name
+            
         return self._send_request(payload)
 
     def get_all_scenes(self) -> dict:
@@ -65,9 +72,46 @@ class UnityMCP:
         """
         Add a built-in component (e.g. "Rigidbody") to a named GameObject.
         :param gameobject_name: Name of the target GameObject.
-        :param component_type_name: The type name, e.g. "Rigidbody", "BoxCollider", etc.
+        :param component_type_name: The type name. Can be:
+                                  - Regular components: "Rigidbody", "BoxCollider", etc.
+                                  - Special mesh types: "CubeMesh", "SphereMesh", "CylinderMesh", "CapsuleMesh", "PlaneMesh"
+                                  For mesh types, this will automatically add MeshFilter and MeshRenderer components.
         :return: Response data
         """
+        # Handle special mesh type components
+        if component_type_name.endswith("Mesh"):
+            # First add MeshFilter
+            result = self._send_request({
+                "command": "add_component",
+                "parameters": {
+                    "gameObjectName": gameobject_name,
+                    "componentTypeName": "MeshFilter"
+                }
+            })
+            if not result.get('success'):
+                return result
+
+            # Then add MeshRenderer
+            result = self._send_request({
+                "command": "add_component",
+                "parameters": {
+                    "gameObjectName": gameobject_name,
+                    "componentTypeName": "MeshRenderer"
+                }
+            })
+            if not result.get('success'):
+                return result
+
+            # Set the primitive mesh type
+            mesh_type = component_type_name[:-4].lower()  # Remove "Mesh" and lowercase
+            return self.set_component_property(
+                gameobject_name,
+                "MeshFilter",
+                "mesh",
+                f"UnityEngine.Mesh, UnityEngine.CoreModule:UnityEngine.{mesh_type}"
+            )
+
+        # Regular component handling
         payload = {
             "command": "add_component",
             "parameters": {
@@ -99,23 +143,64 @@ class UnityMCP:
         }
         return self._send_request(payload)
 
+    def _format_vector3(self, value) -> str:
+        """
+        Format a value as a Vector3 string in the format "x,y,z" expected by Unity.
+        
+        :param value: Value to format, can be tuple, list, string, etc.
+        :return: Formatted string like "x,y,z"
+        """
+        # If already a string in correct format, return it
+        if isinstance(value, str):
+            # If already in x,y,z format, return as is
+            if re.match(r'^-?\d*\.?\d*,-?\d*\.?\d*,-?\d*\.?\d*$', value):
+                return value
+                
+            # Extract numbers from string formats like "(10, 1, 10)" or "Vector3(10,1,10)"
+            matches = re.findall(r'-?\d+\.?\d*', value)
+            if len(matches) >= 3:
+                return f"{matches[0]},{matches[1]},{matches[2]}"
+                
+        # If tuple or list with at least 3 elements
+        elif isinstance(value, (tuple, list)) and len(value) >= 3:
+            return f"{value[0]},{value[1]},{value[2]}"
+            
+        # If couldn't parse, return original value and let server handle error
+        return str(value)
+            
     def set_component_property(self, gameobject_name: str, component_type: str, property_name: str, value) -> dict:
         """
         Set a property on a component attached to a specific GameObject.
         For example, property: 'mass' on a 'Rigidbody' component.
+        
         :param gameobject_name: Name of the GameObject.
         :param component_type: Name of the component type, e.g. "Rigidbody".
         :param property_name: The property to set, e.g. "mass".
-        :param value: The value to set, must be convertible to the correct type in Unity.
+        :param value: The value to set. For Vector3 properties (like Transform.position or scale):
+                      - Pass as tuple/list: (x, y, z)
+                      - Pass as string in format: "x,y,z" 
+                      - Or formats like "(x, y, z)" will be automatically converted
         :return: A dict with the operation result.
         """
+        # Map "scale" to "localScale" for Transform component
+        if component_type == "Transform" and property_name.lower() == "scale":
+            property_name = "localScale"
+        
+        # Special handling for Vector3 values if this is likely a Vector3 property
+        formatted_value = value
+        if component_type == "Transform" and property_name.lower() in ["position", "localscale", "rotation", "eulerAngles"]:
+            formatted_value = self._format_vector3(value)
+        elif isinstance(value, (tuple, list)) and len(value) == 3:
+            # If we have a tuple/list of 3 values, it's likely a Vector3
+            formatted_value = self._format_vector3(value)
+            
         payload = {
             "command": "set_component_property",
             "parameters": {
                 "gameObjectName": gameobject_name,
                 "componentType": component_type,
                 "propertyName": property_name,
-                "value": value
+                "value": formatted_value
             }
         }
         return self._send_request(payload)

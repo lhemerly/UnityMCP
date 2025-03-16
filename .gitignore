@@ -8,3 +8,5 @@ build
 *.pyc
 __pycache__
 *.log
+demo.py
+.llmkey

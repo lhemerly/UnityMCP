@@ -33,6 +33,10 @@ mcp = UnityMCP()
 result = mcp.create_gameobject("MyObject")
 print(f"Created: {result}")
 
+# Create a GameObject with a parent
+result = mcp.create_gameobject("Child", parent_name="MyObject")
+print(f"Created child object: {result}")
+
 # Add a component to it
 mcp.add_component_to_gameobject("MyObject", "Rigidbody")
 
@@ -42,6 +46,10 @@ mcp.set_component_property("MyObject", "Rigidbody", "mass", 5.0)
 # Get all GameObjects in the current scene
 all_objects = mcp.get_all_gameobjects_in_scene()
 print(f"Scene contains {len(all_objects['gameObjects'])} objects")
+
+# Find all GameObjects with a specific tag
+tagged_objects = mcp.find_gameobjects_by_tag("Player")
+print(f"Found {len(tagged_objects['gameObjects'])} with 'Player' tag")
 ```
 
 ## Available Commands
@@ -53,7 +61,7 @@ The Python client provides the following methods:
 - `get_all_gameobjects_in_scene()` - Get all GameObjects in the active scene
 
 ### GameObject Operations
-- `create_gameobject(object_name)` - Create a new GameObject
+- `create_gameobject(object_name, parent_name=None)` - Create a new GameObject with an optional parent
 - `delete_gameobject(gameobject_name)` - Delete a GameObject
 - `find_gameobjects_by_tag(tag)` - Find all GameObjects with a specific tag
 
